@@ -161,7 +161,7 @@
                     你不是飛行員、不是工程師，<br>
                     你是一隻必須靠大吼大叫才能維持飛行的鳥。<br>
                     沒錯，<br>
-                    你是一隻驕傲的國土鳥。 </p>               
+                    你是一隻驕傲的國土鳥。</div>                
             </div>
 
             <button id="startBtn">允許麥克風並開始</button>
@@ -208,7 +208,7 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        // --- 鳥 (物理邏輯：完全不做任何動態調整) ---
+        // --- 鳥 (物理邏輯) ---
         const bird = {
             x: 50,
             y: 200,
@@ -216,7 +216,7 @@
             height: 50,
             velocity: 0,
             gravity: 0.25,      // 固定重力
-            jumpStrength: -5.0, // 固定跳躍力
+            // jumpStrength: -5.0, // (這行已經被下方的邏輯取代)
             rotation: 0,
             
             draw: function() {
@@ -254,18 +254,27 @@
                     this.velocity = 0;
                 }
 
-                // 聲控閾值 (僅保留最基本的敏感度調整，不影響物理)
-                // 為了防止雜音，維持一個基本的門檻
-                let threshold = 15; 
+                // --- 聲控閾值修正區 (讓遊戲需要大叫) ---
+                
+                // 門檻設定：從 15 改為 55
+                // 15 = 輕聲細語
+                // 55 = 大聲喊叫 / 拍手
+                let threshold = 55; 
 
                 if (currentVolume > threshold) {
-                    let boost = (currentVolume / 255) * 2;
-                    this.velocity = this.jumpStrength - boost;
+                    // 計算吼叫強度 (0.0 ~ 1.0)
+                    let intensity = (currentVolume - threshold) / (255 - threshold);
+                    
+                    // 根據強度決定往上飛的力道
+                    // 最少 -4.0 (基本跳躍)，最多約 -8.0 (超級跳躍)
+                    let boost = intensity * 4.0; 
+                    
+                    this.velocity = -4.0 - boost;
                 }
             }
         };
 
-        // --- 障礙物 (核心修改區) ---
+        // --- 障礙物 (維持原本的新手友善設計) ---
         const obstacles = {
             list: [],
             gap: 200, 
@@ -293,23 +302,22 @@
 
             update: function() {
                 // ✅ 1. 新手保護期：前 8 秒完全不生成障礙
-                // 讓玩家有時間適應麥克風和鳥的重量
                 if (survivalTime < 8) {
-                    // 只移動現有的（雖然開局沒有），不生成新的
+                    // 不生成新的
                 } 
                 else {
                     // ✅ 2. 難度曲線設計
                     let frameInterval;
-                    let posRange; // 用來控制隨機範圍 (數值越小越集中在中間)
+                    let posRange; 
 
                     if (survivalTime < 15) {
                         // 新手期 (8-15s)：超級簡單
                         this.dx = 3;          // 慢速
-                        this.gap = 260;       // ✅ 縫隙超大 (原本200)
-                        frameInterval = 180;  // ✅ 生成間隔很久 (給反應時間)
+                        this.gap = 260;       // ✅ 縫隙超大
+                        frameInterval = 180;  // ✅ 生成間隔很久
                         posRange = canvas.height * 0.1; // ✅ 高度幾乎鎖定在中間
                     } else if (survivalTime < 30) {
-                        // 熱身期 (15-30s)：稍微縮緊
+                        // 熱身期 (15-30s)
                         this.dx = 4;
                         this.gap = 220;
                         frameInterval = 140;
@@ -319,7 +327,7 @@
                         this.dx = 5;
                         this.gap = 170;
                         frameInterval = 100;
-                        posRange = canvas.height * 0.35; // 恢復正常隨機
+                        posRange = canvas.height * 0.35;
                         canvas.style.backgroundColor = "#e6a65c";
                     } else {
                         // 地獄模式 (60s+)
@@ -333,10 +341,8 @@
                     // 生成邏輯
                     if (frames % frameInterval === 0) {
                         let center = canvas.height / 2;
-                        // 計算上管長度：中心點 - 半個縫隙 + 隨機偏移
                         let topHeight = center - (this.gap / 2) + (Math.random() - 0.5) * posRange;
 
-                        // 避免管子太短或太長
                         let minPipe = 50;
                         if (topHeight < minPipe) topHeight = minPipe;
                         if (topHeight > canvas.height - this.gap - minPipe) topHeight = canvas.height - this.gap - minPipe;
@@ -350,16 +356,14 @@
                     }
                 }
 
-                // 移動與碰撞 (所有階段都執行)
+                // 移動與碰撞
                 for (let i = 0; i < this.list.length; i++) {
                     let p = this.list[i];
                     p.x -= this.dx;
 
-                    // 碰撞判定
                     if (bird.x + bird.width > p.x && bird.x < p.x + p.w && bird.y < p.top) gameOver();
                     if (bird.x + bird.width > p.x && bird.x < p.x + p.w && bird.y + bird.height > canvas.height - p.bottom) gameOver();
 
-                    // 加分與移除
                     if (p.x + p.w < 0) {
                         this.list.shift();
                         score++;
@@ -469,5 +473,3 @@
     </script>
 </body>
 </html>
-
-
