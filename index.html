@@ -132,10 +132,9 @@
 <body>
 
     <div class="assets">
-        <img id="img-bird" src="fly_right.jpg" alt="Bird">
-        <img id="img-hit" src="fly_hit.jpg" alt="Hit">
-        <audio id="bgm" src="bgm.mp3" loop></audio>
-    </div>
+        <img id="img-bird" src="fly_right.png" alt="Bird">
+        <img id="img-hit" src="fly_hit.png" alt="Hit">
+        </div>
 
     <div id="game-container">
         <canvas id="gameCanvas"></canvas>
@@ -189,9 +188,9 @@
         const ctx = canvas.getContext('2d');
         const birdImg = document.getElementById('img-bird');
         const hitImg = document.getElementById('img-hit');
-        const bgm = document.getElementById('bgm');
+        // bgm 變數已移除
         
-        // 麥克風與音訊
+        // 麥克風與音訊 (保留這部分以供遊戲操控)
         let audioContext, analyser, microphone, dataArray;
         let currentVolume = 0;
         let isMicReady = false;
@@ -246,11 +245,10 @@
 
             update: function() {
                 // 根據難度調整重力手感
-                // Level 1 (0-15s): 重力大，要用力喊
                 if (survivalTime < 15) {
                     this.gravity = 0.35; 
                 } else {
-                    this.gravity = 0.25; // 恢復正常
+                    this.gravity = 0.25; 
                 }
 
                 this.velocity += this.gravity;
@@ -267,8 +265,6 @@
                 }
 
                 // 聲控邏輯
-                // 0-15秒 需要較大聲音 (Threshold = 30)
-                // 15秒後 恢復靈敏 (Threshold = 15)
                 let threshold = (survivalTime < 15) ? 30 : 15;
 
                 if (currentVolume > threshold) {
@@ -288,7 +284,6 @@
                 for (let i = 0; i < this.list.length; i++) {
                     let p = this.list[i];
                     
-                    // 根據難度改變障礙物顏色
                     ctx.fillStyle = (survivalTime > 60) ? '#000' : '#555'; 
 
                     // 上管
@@ -306,26 +301,22 @@
             },
 
             update: function() {
-                // --- 難度控制核心 ---
                 // 生成頻率
                 let frameInterval = 120; 
                 
                 if (survivalTime < 30) {
-                    // 第一關 & 暖身
-                    this.dx = 3;       // 慢速
-                    this.gap = 200;    // 寬縫隙
+                    this.dx = 3;       
+                    this.gap = 200;    
                 } else if (survivalTime < 60) {
-                    // 第二關
-                    this.dx = 5;       // 加速
-                    this.gap = 170;    // 縫隙變窄
+                    this.dx = 5;       
+                    this.gap = 170;    
                     frameInterval = 100;
-                    canvas.style.backgroundColor = "#e6a65c"; // 黃昏色
+                    canvas.style.backgroundColor = "#e6a65c"; 
                 } else {
-                    // 魔王關 (60s+)
-                    this.dx = 7;       // 極速
-                    this.gap = 150;    // 極窄
+                    this.dx = 7;       
+                    this.gap = 150;    
                     frameInterval = 80;
-                    canvas.classList.add('scary-mode'); // 恐怖背景
+                    canvas.classList.add('scary-mode'); 
                 }
 
                 if (frames % frameInterval === 0) {
@@ -360,7 +351,7 @@
             reset: function() { this.list = []; }
         };
 
-        // --- 麥克風系統 ---
+        // --- 麥克風系統 (僅作為輸入使用) ---
         async function initAudio() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -390,23 +381,15 @@
         function updateLeaderboard(finalScore) {
             let highScores = JSON.parse(localStorage.getItem('birdHighScores')) || [];
             
-            // 取得現在時間字串
             let date = new Date();
             let timeStr = `${date.getHours()}:${date.getMinutes()}`;
             
-            // 加入新分數
             highScores.push({ score: finalScore, date: timeStr });
-            
-            // 排序 (高分在前)
             highScores.sort((a, b) => b.score - a.score);
-            
-            // 取前 5 名
             highScores = highScores.slice(0, 5);
             
-            // 存回去
             localStorage.setItem('birdHighScores', JSON.stringify(highScores));
             
-            // 顯示在 UI
             let listHTML = '';
             highScores.forEach((item, index) => {
                 let rankClass = (index === 0) ? 'top' : '';
@@ -443,10 +426,7 @@
 
             document.getElementById('scoreDisplay').innerText = "SCORE: 0";
             
-            // 嘗試播放音樂
-            bgm.volume = 0.5;
-            bgm.currentTime = 0;
-            bgm.play().catch(e => console.log("BGM play failed (needs interaction):", e));
+            // 音樂播放邏輯已移除
 
             loop();
         }
@@ -454,7 +434,7 @@
         function gameOver() {
             if (gameState === 'GAMEOVER') return;
             gameState = 'GAMEOVER';
-            bgm.pause(); // 停止音樂
+            // 音樂暫停邏輯已移除
             
             // 鳥撞飛效果
             bird.velocity = -8; 
@@ -472,18 +452,14 @@
         }
 
         function loop() {
-            // 清除畫布
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // 取得音量
             currentVolume = getVolume();
             
-            // 更新 UI 音量條
             let barHeight = Math.min(currentVolume / 255 * 100 * 3, 100);
             document.getElementById('micBar').style.height = barHeight + "%";
 
             if (gameState === 'PLAYING') {
-                // 更新時間
                 survivalTime = (Date.now() - startTime) / 1000;
                 document.getElementById('timeDisplay').innerText = `⏱️ ${survivalTime.toFixed(1)}s`;
 
@@ -496,7 +472,6 @@
                 requestAnimationFrame(loop);
             } 
             else if (gameState === 'GAMEOVER') {
-                // 遊戲結束動畫 (只處理鳥墜落)
                 bird.y += bird.velocity;
                 bird.velocity += bird.gravity;
                 bird.draw();
