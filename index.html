@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>聲控工地鳥 (8-Bit Voice Game)</title>
+    <title>聲控工地鳥 - 極限生存挑戰</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
@@ -11,46 +11,121 @@
             margin: 0;
             overflow: hidden;
             background-color: #333;
-            font-family: 'Press Start 2P', cursive; /* 8-bit 風格字體 */
+            font-family: 'Press Start 2P', cursive;
             touch-action: none;
+            user-select: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
         }
 
         #gameCanvas {
             display: block;
-            margin: 0 auto;
-            background-color: #70c5ce; /* 天空藍 */
-            image-rendering: pixelated; /* 讓圖片保持像素風格不模糊 */
+            width: 100%;
+            height: 100%;
+            background-color: #70c5ce; /* 初始天空藍 */
+            image-rendering: pixelated;
+            transition: background-color 2s ease; /* 背景變色轉場 */
         }
 
-        #ui-layer {
+        /* 恐怖背景樣式 */
+        .scary-mode {
+            background-color: #4a0000 !important; /* 血紅色 */
+            animation: shake 0.5s infinite;
+        }
+        @keyframes shake {
+            0% { transform: translate(1px, 1px); }
+            50% { transform: translate(-1px, -1px); }
+            100% { transform: translate(1px, 1px); }
+        }
+
+        /* UI 層設定 */
+        .ui-layer {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
-            color: white;
-            text-shadow: 2px 2px 0 #000;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             pointer-events: none;
         }
 
-        button {
+        .hud {
+            display: flex;
+            justify-content: space-between;
+            padding: 20px;
+            font-size: 20px;
+            color: white;
+            text-shadow: 2px 2px 0 #000;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: white;
+            z-index: 100;
             pointer-events: auto;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        h1 {
+            line-height: 1.5;
+            color: #FFD700;
+            text-shadow: 4px 4px 0 #000;
+            font-size: 32px;
+        }
+
+        button {
             font-family: 'Press Start 2P', cursive;
-            padding: 15px 20px;
-            font-size: 16px;
+            padding: 20px 30px;
+            font-size: 18px;
             background: #ff5500;
             color: white;
             border: 4px solid #fff;
             cursor: pointer;
-            box-shadow: 4px 4px 0px #000;
+            box-shadow: 6px 6px 0px #000;
+            margin-top: 20px;
+            transition: transform 0.1s;
         }
 
         button:active {
-            transform: translate(2px, 2px);
-            box-shadow: 2px 2px 0px #000;
+            transform: translate(3px, 3px);
+            box-shadow: 3px 3px 0px #000;
         }
 
-        /* 隱藏原始圖片元素 */
+        /* 排行榜樣式 */
+        #leaderboard {
+            margin-top: 20px;
+            text-align: left;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border: 2px solid #fff;
+            width: 80%;
+            max-width: 300px;
+        }
+        .rank-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #ccc;
+        }
+        .rank-item.top { color: #FFD700; }
+
         .assets { display: none; }
     </style>
 </head>
@@ -59,41 +134,77 @@
     <div class="assets">
         <img id="img-bird" src="fly_right.jpg" alt="Bird">
         <img id="img-hit" src="fly_hit.jpg" alt="Hit">
+        <audio id="bgm" src="bgm.mp3" loop></audio>
     </div>
 
-    <div id="ui-layer">
-        <h1 id="title">聲控工地鳥</h1>
-        <p>大聲喊叫 = 往上飛<br>小聲說話 = 懸停<br>安靜 = 下墜</p>
-        <button id="startBtn">點擊開始 (允許麥克風)</button>
-        <p id="scoreText" style="display:none; margin-top:20px; font-size: 24px;">SCORE: 0</p>
-    </div>
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div class="ui-layer">
+            <div class="hud">
+                <span id="scoreDisplay">SCORE: 0</span>
+                <span id="timeDisplay">⏱️ 0.0s</span>
+            </div>
+            <div style="position:absolute; left:20px; top:80px; width:15px; height:100px; border:2px solid white;">
+                <div id="micBar" style="background:#0f0; width:100%; height:0%; position:absolute; bottom:0;"></div>
+            </div>
+        </div>
+        
+        <div id="startScreen" class="overlay">
+            <h1>🏗️ 聲控工地鳥<br>極限生存</h1>
+            <p style="margin:20px 0; line-height:1.8;">
+                對麥克風大叫 = 往上飛<br>
+                小聲 = 懸停 / 閉嘴 = 下墜
+            </p>
+            
+            <div style="margin: 20px 0; font-size: 16px; text-align: left; display: inline-block;">
+                <div style="color: #88ccff;">🔹 0-15s: 暖身 (用力喊!)</div>
+                <div style="color: #ffcc00;">🔸 15-60s: 障礙加速</div>
+                <div style="color: #ff4444;">💀 60s+: 地獄模式</div>
+            </div>
 
-    <canvas id="gameCanvas"></canvas>
+            <button id="startBtn">允許麥克風並開始</button>
+            <p style="font-size: 12px; margin-top: 20px; color: #aaa;">(建議使用耳機遊玩)</p>
+        </div>
+
+        <div id="gameOverScreen" class="overlay hidden">
+            <h1>👷 工安意外!</h1>
+            <p>本次存活</p>
+            <h2 id="finalTime" style="font-size: 40px; color: #fff; margin: 10px 0;">0s</h2>
+            <p>本次得分</p>
+            <h2 id="finalScore" style="font-size: 50px; color: #FFD700; margin: 10px 0;">0</h2>
+            
+            <div id="leaderboard">
+                <div style="text-align:center; margin-bottom:10px; text-decoration:underline;">🏆 英雄榜 (Top 5)</div>
+                <div id="rankList"></div>
+            </div>
+
+            <button onclick="location.reload()">再試一次</button>
+        </div>
+    </div>
 
     <script>
-        // --- 變數設定 ---
+        // --- 核心變數 ---
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        
-        // 圖片資源
         const birdImg = document.getElementById('img-bird');
         const hitImg = document.getElementById('img-hit');
+        const bgm = document.getElementById('bgm');
+        
+        // 麥克風與音訊
+        let audioContext, analyser, microphone, dataArray;
+        let currentVolume = 0;
+        let isMicReady = false;
 
         // 遊戲狀態
         let gameState = 'START'; // START, PLAYING, GAMEOVER
         let frames = 0;
         let score = 0;
-        let gameSpeed = 3;
+        let startTime = 0;
+        let survivalTime = 0;
+        let difficultyLevel = 1;
 
-        // 麥克風相關
-        let audioContext;
-        let analyser;
-        let microphone;
-        let dataArray;
-        let currentVolume = 0;
-        const SENSITIVITY = 25; // 聲音觸發門檻 (0-255)，數值越小越靈敏
-
-        // --- 響應式畫布設定 ---
+        // --- 響應式畫布 ---
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -101,111 +212,130 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        // --- 鳥的物件 ---
+        // --- 鳥 (主角) ---
         const bird = {
             x: 50,
-            y: 150,
-            width: 44,  // 根據你的圖片調整大小
-            height: 34, // 根據你的圖片調整大小
+            y: 200,
+            width: 50,
+            height: 50,
             velocity: 0,
-            gravity: 0.25,
-            jumpStrength: -4.5, // 跳躍力道
+            gravity: 0.25,      // 預設重力
+            jumpStrength: -5.0, // 預設跳躍力
             rotation: 0,
-
+            
             draw: function() {
                 ctx.save();
                 ctx.translate(this.x + this.width/2, this.y + this.height/2);
                 
-                // 根據速度旋轉 (飛行效果)
                 if (gameState === 'PLAYING') {
                     this.rotation = Math.min(Math.PI / 4, Math.max(-Math.PI / 4, (this.velocity * 0.1)));
                 } else if (gameState === 'GAMEOVER') {
-                    this.rotation += 0.1; // 撞到後旋轉下墜
+                    this.rotation += 0.3; // 墜落旋轉
                 }
-                
                 ctx.rotate(this.rotation);
 
                 let renderImg = (gameState === 'GAMEOVER') ? hitImg : birdImg;
-                
-                // 嘗試繪製圖片，如果圖片沒載入則畫色塊
                 if (renderImg.complete && renderImg.naturalHeight !== 0) {
                     ctx.drawImage(renderImg, -this.width/2, -this.height/2, this.width, this.height);
                 } else {
                     ctx.fillStyle = (gameState === 'GAMEOVER') ? 'red' : 'yellow';
                     ctx.fillRect(-this.width/2, -this.height/2, this.width, this.height);
                 }
-                
                 ctx.restore();
             },
 
             update: function() {
-                // 重力作用
+                // 根據難度調整重力手感
+                // Level 1 (0-15s): 重力大，要用力喊
+                if (survivalTime < 15) {
+                    this.gravity = 0.35; 
+                } else {
+                    this.gravity = 0.25; // 恢復正常
+                }
+
                 this.velocity += this.gravity;
                 this.y += this.velocity;
 
-                // 地板碰撞
+                // 地板與天花板
                 if (this.y + this.height >= canvas.height) {
                     this.y = canvas.height - this.height;
                     gameOver();
                 }
-
-                // 天花板限制
                 if (this.y < 0) {
                     this.y = 0;
                     this.velocity = 0;
                 }
 
-                // --- 聲音控制邏輯 ---
-                // 如果音量大於門檻，給予向上推力
-                if (currentVolume > SENSITIVITY) {
-                    // 音量越大，推力可以稍微強一點 (微調)
-                    let boost = (currentVolume / 255) * 1.5; 
+                // 聲控邏輯
+                // 0-15秒 需要較大聲音 (Threshold = 30)
+                // 15秒後 恢復靈敏 (Threshold = 15)
+                let threshold = (survivalTime < 15) ? 30 : 15;
+
+                if (currentVolume > threshold) {
+                    let boost = (currentVolume / 255) * 2;
                     this.velocity = this.jumpStrength - boost;
                 }
             }
         };
 
-        // --- 障礙物 (工地鋼樑) ---
+        // --- 障礙物 ---
         const obstacles = {
             list: [],
-            gap: 180, // 上下鋼樑的間距
-            dx: 3,    // 移動速度
+            gap: 200, 
+            dx: 3, // 移動速度
 
             draw: function() {
                 for (let i = 0; i < this.list.length; i++) {
                     let p = this.list[i];
                     
-                    // 繪製鋼樑 (類似工地的 I-Beam 風格)
-                    ctx.fillStyle = '#555'; // 深灰
-                    
-                    // 上方鋼樑
+                    // 根據難度改變障礙物顏色
+                    ctx.fillStyle = (survivalTime > 60) ? '#000' : '#555'; 
+
+                    // 上管
                     ctx.fillRect(p.x, 0, p.w, p.top);
-                    // 上方鋼樑裝飾 (鉚釘效果)
-                    ctx.fillStyle = '#333';
+                    // 下管
+                    ctx.fillRect(p.x, canvas.height - p.bottom, p.w, p.bottom);
+                    
+                    // 裝飾
+                    ctx.fillStyle = (survivalTime > 60) ? '#333' : '#333';
                     ctx.fillRect(p.x + 10, 0, 5, p.top);
                     ctx.fillRect(p.x + p.w - 15, 0, 5, p.top);
-
-                    // 下方鋼樑
-                    ctx.fillStyle = '#555';
-                    ctx.fillRect(p.x, canvas.height - p.bottom, p.w, p.bottom);
-                    // 下方鋼樑裝飾
-                    ctx.fillStyle = '#333';
                     ctx.fillRect(p.x + 10, canvas.height - p.bottom, 5, p.bottom);
                     ctx.fillRect(p.x + p.w - 15, canvas.height - p.bottom, 5, p.bottom);
                 }
             },
 
             update: function() {
-                // 每 120 幀生成一個新障礙物
-                if (frames % 120 === 0) {
-                    // 隨機高度
+                // --- 難度控制核心 ---
+                // 生成頻率
+                let frameInterval = 120; 
+                
+                if (survivalTime < 30) {
+                    // 第一關 & 暖身
+                    this.dx = 3;       // 慢速
+                    this.gap = 200;    // 寬縫隙
+                } else if (survivalTime < 60) {
+                    // 第二關
+                    this.dx = 5;       // 加速
+                    this.gap = 170;    // 縫隙變窄
+                    frameInterval = 100;
+                    canvas.style.backgroundColor = "#e6a65c"; // 黃昏色
+                } else {
+                    // 魔王關 (60s+)
+                    this.dx = 7;       // 極速
+                    this.gap = 150;    // 極窄
+                    frameInterval = 80;
+                    canvas.classList.add('scary-mode'); // 恐怖背景
+                }
+
+                if (frames % frameInterval === 0) {
                     let topHeight = Math.random() * (canvas.height / 2);
-                    let minHeight = 50; 
+                    let minHeight = 50;
                     if (topHeight < minHeight) topHeight = minHeight;
 
                     this.list.push({
                         x: canvas.width,
-                        w: 60, // 鋼樑寬度
+                        w: 70,
                         top: topHeight,
                         bottom: canvas.height - (topHeight + this.gap)
                     });
@@ -215,144 +345,169 @@
                     let p = this.list[i];
                     p.x -= this.dx;
 
-                    // 碰撞檢測
-                    // 1. 撞到上管
-                    if (bird.x + bird.width > p.x && bird.x < p.x + p.w && bird.y < p.top) {
-                        gameOver();
-                    }
-                    // 2. 撞到下管
-                    if (bird.x + bird.width > p.x && bird.x < p.x + p.w && bird.y + bird.height > canvas.height - p.bottom) {
-                        gameOver();
-                    }
+                    // 碰撞
+                    if (bird.x + bird.width > p.x && bird.x < p.x + p.w && bird.y < p.top) gameOver();
+                    if (bird.x + bird.width > p.x && bird.x < p.x + p.w && bird.y + bird.height > canvas.height - p.bottom) gameOver();
 
-                    // 移除超出的障礙物並加分
+                    // 加分
                     if (p.x + p.w < 0) {
                         this.list.shift();
                         score++;
-                        document.getElementById('title').innerText = "SCORE: " + score;
+                        document.getElementById('scoreDisplay').innerText = "SCORE: " + score;
                     }
                 }
             },
-            
-            reset: function() {
-                this.list = [];
-            }
+            reset: function() { this.list = []; }
         };
 
-        // --- 麥克風啟動函數 ---
+        // --- 麥克風系統 ---
         async function initAudio() {
             try {
-                // 1. 請求權限
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-                
-                // 2. 設定 Audio Context
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 analyser = audioContext.createAnalyser();
                 microphone = audioContext.createMediaStreamSource(stream);
-                
-                // 3. 連接節點
                 microphone.connect(analyser);
                 analyser.fftSize = 256;
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
                 
+                isMicReady = true;
                 startGame();
             } catch (err) {
-                alert("無法存取麥克風！請確認瀏覽器權限或是否使用 HTTPS/Localhost。錯誤: " + err);
+                alert("無法啟用麥克風！請確認權限或使用 HTTPS 連線。");
             }
         }
 
-        // 讀取音量
         function getVolume() {
             if (!analyser) return 0;
             analyser.getByteFrequencyData(dataArray);
-            
-            // 計算平均音量
             let sum = 0;
-            for(let i = 0; i < dataArray.length; i++) {
-                sum += dataArray[i];
-            }
-            return sum / dataArray.length;
+            for(let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+            return sum / dataArray.length; // 0 ~ 255
         }
 
-        // --- 遊戲控制 ---
+        // --- 排行榜 (LocalStorage) ---
+        function updateLeaderboard(finalScore) {
+            let highScores = JSON.parse(localStorage.getItem('birdHighScores')) || [];
+            
+            // 取得現在時間字串
+            let date = new Date();
+            let timeStr = `${date.getHours()}:${date.getMinutes()}`;
+            
+            // 加入新分數
+            highScores.push({ score: finalScore, date: timeStr });
+            
+            // 排序 (高分在前)
+            highScores.sort((a, b) => b.score - a.score);
+            
+            // 取前 5 名
+            highScores = highScores.slice(0, 5);
+            
+            // 存回去
+            localStorage.setItem('birdHighScores', JSON.stringify(highScores));
+            
+            // 顯示在 UI
+            let listHTML = '';
+            highScores.forEach((item, index) => {
+                let rankClass = (index === 0) ? 'top' : '';
+                let medal = ['🥇','🥈','🥉','4️⃣','5️⃣'][index] || '';
+                listHTML += `
+                    <div class="rank-item ${rankClass}">
+                        <span>${medal} ${item.date}</span>
+                        <span>${item.score}分</span>
+                    </div>
+                `;
+            });
+            document.getElementById('rankList').innerHTML = listHTML;
+        }
+
+        // --- 遊戲流程 ---
         function startGame() {
-            document.getElementById('ui-layer').style.display = 'none';
-            document.getElementById('scoreText').style.display = 'block';
+            document.getElementById('startScreen').classList.add('hidden');
+            document.getElementById('gameOverScreen').classList.add('hidden');
+            
             gameState = 'PLAYING';
-            bird.y = 150;
-            bird.velocity = 0;
-            obstacles.reset();
             score = 0;
             frames = 0;
+            survivalTime = 0;
+            startTime = Date.now();
+            
+            bird.y = canvas.height / 2;
+            bird.velocity = 0;
+            bird.rotation = 0;
+            obstacles.reset();
+            
+            // 重置背景
+            canvas.style.backgroundColor = "#70c5ce";
+            canvas.classList.remove('scary-mode');
+
+            document.getElementById('scoreDisplay').innerText = "SCORE: 0";
+            
+            // 嘗試播放音樂
+            bgm.volume = 0.5;
+            bgm.currentTime = 0;
+            bgm.play().catch(e => console.log("BGM play failed (needs interaction):", e));
+
             loop();
         }
 
         function gameOver() {
+            if (gameState === 'GAMEOVER') return;
             gameState = 'GAMEOVER';
-            // 撞擊效果：稍微往上彈一下然後下墜
-            bird.velocity = -5; 
+            bgm.pause(); // 停止音樂
+            
+            // 鳥撞飛效果
+            bird.velocity = -8; 
+
+            // 顯示結算
+            document.getElementById('finalScore').innerText = score;
+            document.getElementById('finalTime').innerText = survivalTime.toFixed(1) + "s";
+            
+            // 更新排行榜
+            updateLeaderboard(score);
+
+            setTimeout(() => {
+                document.getElementById('gameOverScreen').classList.remove('hidden');
+            }, 1000);
         }
 
-        function resetGame() {
-            // 如果已經在遊戲結束畫面，點擊重來
-             document.getElementById('ui-layer').innerHTML = `
-                <h1 style="color:red">GAME OVER</h1>
-                <p>Score: ${score}</p>
-                <button onclick="startGame()">再試一次</button>
-            `;
-            document.getElementById('ui-layer').style.display = 'block';
-        }
-
-        // --- 主迴圈 ---
         function loop() {
-            // 1. 清空畫布
-            ctx.fillStyle = "#70c5ce"; // 背景色
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // 清除畫布
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // 繪製背景裝飾 (簡單的遠景建築)
-            ctx.fillStyle = "#a3e4ea";
-            ctx.fillRect(50, canvas.height - 200, 100, 200);
-            ctx.fillRect(200, canvas.height - 300, 80, 300);
-            ctx.fillRect(400, canvas.height - 150, 120, 150);
-
-            // 2. 更新邏輯
+            // 取得音量
             currentVolume = getVolume();
             
-            // 視覺化音量 (左上角小條)
-            ctx.fillStyle = 'rgba(0, 255, 0, 0.5)';
-            ctx.fillRect(10, 10, currentVolume, 10);
-            
+            // 更新 UI 音量條
+            let barHeight = Math.min(currentVolume / 255 * 100 * 3, 100);
+            document.getElementById('micBar').style.height = barHeight + "%";
+
             if (gameState === 'PLAYING') {
+                // 更新時間
+                survivalTime = (Date.now() - startTime) / 1000;
+                document.getElementById('timeDisplay').innerText = `⏱️ ${survivalTime.toFixed(1)}s`;
+
                 bird.update();
                 obstacles.update();
                 obstacles.draw();
                 bird.draw();
-                
-                // 顯示分數
-                ctx.fillStyle = "#fff";
-                ctx.font = "30px 'Press Start 2P'";
-                ctx.fillText(score, canvas.width/2 - 10, 50);
-                ctx.strokeText(score, canvas.width/2 - 10, 50);
 
                 frames++;
                 requestAnimationFrame(loop);
             } 
             else if (gameState === 'GAMEOVER') {
-                // 遊戲結束時只處理鳥的墜落
+                // 遊戲結束動畫 (只處理鳥墜落)
                 bird.y += bird.velocity;
                 bird.velocity += bird.gravity;
                 bird.draw();
-                obstacles.draw(); // 障礙物靜止
+                obstacles.draw();
 
-                if (bird.y > canvas.height) {
-                    resetGame(); // 鳥掉出螢幕才顯示重來按鈕
-                } else {
+                if (bird.y < canvas.height + 200) {
                     requestAnimationFrame(loop);
                 }
             }
         }
 
-        // 按鈕監聽
         document.getElementById('startBtn').addEventListener('click', initAudio);
 
     </script>
