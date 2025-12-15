@@ -26,7 +26,7 @@
             display: block;
             width: 100%;
             height: 100%;
-            background-color: #70c5ce; /* 初始天空藍 */
+            background-color: #70c5ce;
             image-rendering: pixelated;
             transition: background-color 2s ease;
         }
@@ -54,9 +54,10 @@
 
         .hud {
             display: flex;
-            justify-content: space-between;
+            /* 修改：原本是 space-between，現在只剩時間，改為置中或靠右皆可，這裡設為置中讓時間更明顯 */
+            justify-content: center; 
             padding: 20px;
-            font-size: 20px;
+            font-size: 24px; /*稍微加大一點字體*/
             color: white;
             text-shadow: 2px 2px 0 #000;
         }
@@ -76,7 +77,7 @@
             color: white;
             z-index: 100;
             pointer-events: auto;
-            padding: 20px; /* 增加內距防止貼邊 */
+            padding: 20px;
             box-sizing: border-box;
         }
 
@@ -84,13 +85,12 @@
             display: none !important;
         }
 
-        /* 【修改 4】修復標題排版 */
         h1 {
             line-height: 1.4;
             color: #FFD700;
             text-shadow: 4px 4px 0 #000;
-            font-size: 24px; /* 稍微調小一點確保不爆版 */
-            margin: 0 0 25px 0; /* 移除左右邊距，增加下方邊距 */
+            font-size: 24px;
+            margin: 0 0 25px 0;
             max-width: 100%;
         }
 
@@ -112,8 +112,6 @@
             box-shadow: 3px 3px 0px #000;
         }
 
-        /* 【修改 3】移除排行榜相關 CSS */
-
         .assets { display: none; }
     </style>
 </head>
@@ -129,7 +127,6 @@
         
         <div class="ui-layer">
             <div class="hud">
-                <span id="scoreDisplay">SCORE: 0</span>
                 <span id="timeDisplay">⏱️ 0.0s</span>
             </div>
             <div style="position:absolute; left:20px; top:80px; width:15px; height:100px; border:2px solid white;">
@@ -149,8 +146,7 @@
                 <div style="color: #88ccff;">
                     請準備好你的喉嚨，<br>
                     用聲音控制國土鳥躲避障礙。<br><br>
-                    讓我們可愛的國土鳥，<br>
-                    可以平安的回家！
+                    閃避意外！
                 </div>                  
             </div>
 
@@ -160,9 +156,7 @@
         <div id="gameOverScreen" class="overlay hidden">
             <h1>👷 工安意外!</h1>
             <p>本次存活</p>
-            <h2 id="finalTime" style="font-size: 40px; color: #fff; margin: 10px 0;">0s</h2>
-            <p>本次得分</p>
-            <h2 id="finalScore" style="font-size: 50px; color: #FFD700; margin: 10px 0;">0</h2>
+            <h2 id="finalTime" style="font-size: 50px; color: #fff; margin: 20px 0;">0s</h2>
             
             <button onclick="location.reload()">再試一次</button>
         </div>
@@ -181,7 +175,6 @@
 
         let gameState = 'START';
         let frames = 0;
-        let score = 0;
         let startTime = 0;
         let survivalTime = 0;
 
@@ -197,8 +190,17 @@
         const bird = {
             x: 50,
             y: 200,
-            width: 100,
+            
+            // 維持大鳥設定
+            width: 100,  
             height: 100,
+            
+            // 維持縮小碰撞箱設定 (避免圖太大容易死)
+            collisionX: 15,   
+            collisionY: 15,   
+            collisionWidth: 70, 
+            collisionHeight: 70, 
+
             velocity: 0,
             gravity: 0.25,
             rotation: 0,
@@ -237,8 +239,7 @@
                     this.velocity = 0;
                 }
 
-                // --- 聲控閾值修正區 ---
-                // 【修改 2】調低門檻，提高靈敏度 (原為 55)
+                // 聲控閾值 (維持靈敏度)
                 let threshold = 40; 
 
                 if (currentVolume > threshold) {
@@ -252,7 +253,7 @@
         // --- 障礙物 ---
         const obstacles = {
             list: [],
-            gap: 200, 
+            gap: 260, 
             dx: 3, 
 
             draw: function() {
@@ -261,21 +262,18 @@
                     
                     ctx.fillStyle = (survivalTime > 60) ? '#000' : '#555'; 
 
-                    // 【修改 1】 繪製邏輯：根據 easyType 決定繪製哪一邊
-                    // 繪製上管 (如果是正常模式 或是 僅上方模式)
+                    // 繪製上管
                     if (p.easyType !== 'bottomOnly') {
                         ctx.fillRect(p.x, 0, p.w, p.top);
-                        // 裝飾
                         ctx.fillStyle = '#333';
                         ctx.fillRect(p.x + 10, 0, 5, p.top);
                         ctx.fillRect(p.x + p.w - 15, 0, 5, p.top);
-                        ctx.fillStyle = (survivalTime > 60) ? '#000' : '#555'; // 重置顏色給下管用
+                        ctx.fillStyle = (survivalTime > 60) ? '#000' : '#555';
                     }
 
-                    // 繪製下管 (如果是正常模式 或是 僅下方模式)
+                    // 繪製下管
                     if (p.easyType !== 'topOnly') {
                         ctx.fillRect(p.x, canvas.height - p.bottom, p.w, p.bottom);
-                        // 裝飾
                         ctx.fillStyle = '#333';
                         ctx.fillRect(p.x + 10, canvas.height - p.bottom, 5, p.bottom);
                         ctx.fillRect(p.x + p.w - 15, canvas.height - p.bottom, 5, p.bottom);
@@ -286,39 +284,34 @@
             update: function() {
                 let frameInterval;
                 let posRange; 
-                let isEasyMode = false; // 標記是否為簡易模式
+                let isEasyMode = false;
 
-                // 【修改 1】 難度曲線調整：0-8秒加入簡易模式
+                // 難度曲線
                 if (survivalTime < 8) {
-                    // 0-8s: 簡易模式 (單邊管)
                     this.dx = 3;
-                    this.gap = 400; // 雖然單邊用不到 gap，但設大一點避免邏輯錯誤
-                    frameInterval = 200; // 生成慢一點
+                    this.gap = 400; 
+                    frameInterval = 200; 
                     posRange = canvas.height * 0.1;
                     isEasyMode = true;
                 } else if (survivalTime < 15) {
-                    // 8-15s: 正常簡單
                     this.dx = 3;          
-                    this.gap = 260;        
+                    this.gap = 260; 
                     frameInterval = 180;  
                     posRange = canvas.height * 0.1; 
                 } else if (survivalTime < 30) {
-                    // 15-30s: 普通
                     this.dx = 4;
-                    this.gap = 220;
+                    this.gap = 250; 
                     frameInterval = 140;
                     posRange = canvas.height * 0.2;
                 } else if (survivalTime < 60) {
-                    // 30-60s: 加速
                     this.dx = 5;
-                    this.gap = 170;
+                    this.gap = 220; 
                     frameInterval = 100;
                     posRange = canvas.height * 0.35;
                     canvas.style.backgroundColor = "#e6a65c";
                 } else {
-                    // 60s+: 地獄
                     this.dx = 7;
-                    this.gap = 150;
+                    this.gap = 200; 
                     frameInterval = 80;
                     posRange = canvas.height * 0.4;
                     canvas.classList.add('scary-mode');
@@ -337,10 +330,9 @@
                         w: 70,
                         top: topHeight,
                         bottom: canvas.height - (topHeight + this.gap),
-                        easyType: null // 預設為正常雙邊管
+                        easyType: null 
                     };
 
-                    // 【修改 1】 如果是簡易模式，隨機決定只留上方或下方
                     if (isEasyMode) {
                         obstacleData.easyType = Math.random() < 0.5 ? 'topOnly' : 'bottomOnly';
                     }
@@ -352,16 +344,20 @@
                     let p = this.list[i];
                     p.x -= this.dx;
 
-                    // 【修改 1】 碰撞偵測：根據 easyType 判斷
-                    // 撞到上管 (前提是上管存在)
-                    if (p.easyType !== 'bottomOnly' && bird.x + bird.width > p.x && bird.x < p.x + p.w && bird.y < p.top) gameOver();
-                    // 撞到下管 (前提是下管存在)
-                    if (p.easyType !== 'topOnly' && bird.x + bird.width > p.x && bird.x < p.x + p.w && bird.y + bird.height > canvas.height - p.bottom) gameOver();
+                    // 碰撞偵測 (使用 collisionBox)
+                    let birdBox = {
+                        x: bird.x + bird.collisionX,
+                        y: bird.y + bird.collisionY,
+                        width: bird.collisionWidth,
+                        height: bird.collisionHeight
+                    };
+
+                    if (p.easyType !== 'bottomOnly' && birdBox.x + birdBox.width > p.x && birdBox.x < p.x + p.w && birdBox.y < p.top) gameOver();
+                    if (p.easyType !== 'topOnly' && birdBox.x + birdBox.width > p.x && birdBox.x < p.x + p.w && birdBox.y + birdBox.height > canvas.height - p.bottom) gameOver();
 
                     if (p.x + p.w < 0) {
                         this.list.shift();
-                        score++;
-                        document.getElementById('scoreDisplay').innerText = "SCORE: " + score;
+                        // 修改：不再更新 scoreDisplay
                     }
                 }
             },
@@ -393,13 +389,10 @@
             return sum / dataArray.length; 
         }
 
-        // 【修改 3】移除 updateLeaderboard 函數
-
         function startGame() {
             document.getElementById('startScreen').classList.add('hidden');
             document.getElementById('gameOverScreen').classList.add('hidden');
             gameState = 'PLAYING';
-            score = 0;
             frames = 0;
             survivalTime = 0;
             startTime = Date.now();
@@ -409,7 +402,7 @@
             obstacles.reset();
             canvas.style.backgroundColor = "#70c5ce";
             canvas.classList.remove('scary-mode');
-            document.getElementById('scoreDisplay').innerText = "SCORE: 0";
+            // 修改：不再重置 Score 文字
             loop();
         }
 
@@ -417,9 +410,8 @@
             if (gameState === 'GAMEOVER') return;
             gameState = 'GAMEOVER';
             bird.velocity = -8; 
-            document.getElementById('finalScore').innerText = score;
+            // 修改：移除了 finalScore 的更新
             document.getElementById('finalTime').innerText = survivalTime.toFixed(1) + "s";
-            // 【修改 3】移除呼叫 updateLeaderboard
             setTimeout(() => { document.getElementById('gameOverScreen').classList.remove('hidden'); }, 1000);
         }
 
@@ -451,4 +443,3 @@
     </script>
 </body>
 </html>
-
