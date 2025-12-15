@@ -28,12 +28,12 @@
             height: 100%;
             background-color: #70c5ce; /* 初始天空藍 */
             image-rendering: pixelated;
-            transition: background-color 2s ease; /* 背景變色轉場 */
+            transition: background-color 2s ease;
         }
 
         /* 恐怖背景樣式 */
         .scary-mode {
-            background-color: #4a0000 !important; /* 血紅色 */
+            background-color: #4a0000 !important;
             animation: shake 0.5s infinite;
         }
         @keyframes shake {
@@ -134,7 +134,7 @@
     <div class="assets">
         <img id="img-bird" src="fly_right.png" alt="Bird">
         <img id="img-hit" src="fly_hit.png" alt="Hit">
-        </div>
+    </div>
 
     <div id="game-container">
         <canvas id="gameCanvas"></canvas>
@@ -157,8 +157,9 @@
             </p>
             
             <div style="margin: 20px 0; font-size: 16px; text-align: left; display: inline-block;">
-                <div style="color: #88ccff;">🔹 0-15s: 暖身 (用力喊!)</div>
-                <div style="color: #ffcc00;">🔸 15-60s: 障礙加速</div>
+                <div style="color: #88ccff;">🔹 0-8s: 懸停特訓 (無障礙)</div>
+                <div style="color: #00ff00;">🔹 8-15s: 新手通道 (寬敞)</div>
+                <div style="color: #ffcc00;">🔸 15-60s: 正常施工</div>
                 <div style="color: #ff4444;">💀 60s+: 地獄模式</div>
             </div>
 
@@ -188,20 +189,16 @@
         const ctx = canvas.getContext('2d');
         const birdImg = document.getElementById('img-bird');
         const hitImg = document.getElementById('img-hit');
-        // bgm 變數已移除
         
-        // 麥克風與音訊 (保留這部分以供遊戲操控)
         let audioContext, analyser, microphone, dataArray;
         let currentVolume = 0;
         let isMicReady = false;
 
-        // 遊戲狀態
-        let gameState = 'START'; // START, PLAYING, GAMEOVER
+        let gameState = 'START';
         let frames = 0;
         let score = 0;
         let startTime = 0;
         let survivalTime = 0;
-        let difficultyLevel = 1;
 
         // --- 響應式畫布 ---
         function resizeCanvas() {
@@ -211,15 +208,15 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        // --- 鳥 (主角) ---
+        // --- 鳥 (物理邏輯：完全不做任何動態調整) ---
         const bird = {
             x: 50,
             y: 200,
             width: 50,
             height: 50,
             velocity: 0,
-            gravity: 0.25,      // 預設重力
-            jumpStrength: -5.0, // 預設跳躍力
+            gravity: 0.25,      // 固定重力
+            jumpStrength: -5.0, // 固定跳躍力
             rotation: 0,
             
             draw: function() {
@@ -229,7 +226,7 @@
                 if (gameState === 'PLAYING') {
                     this.rotation = Math.min(Math.PI / 4, Math.max(-Math.PI / 4, (this.velocity * 0.1)));
                 } else if (gameState === 'GAMEOVER') {
-                    this.rotation += 0.3; // 墜落旋轉
+                    this.rotation += 0.3;
                 }
                 ctx.rotate(this.rotation);
 
@@ -244,17 +241,10 @@
             },
 
             update: function() {
-                // 根據難度調整重力手感
-                if (survivalTime < 15) {
-                    this.gravity = 0.35; 
-                } else {
-                    this.gravity = 0.25; 
-                }
-
+                // ⚠️ 重力不再隨時間變化，保持手感一致
                 this.velocity += this.gravity;
                 this.y += this.velocity;
 
-                // 地板與天花板
                 if (this.y + this.height >= canvas.height) {
                     this.y = canvas.height - this.height;
                     gameOver();
@@ -264,8 +254,9 @@
                     this.velocity = 0;
                 }
 
-                // 聲控邏輯
-                let threshold = (survivalTime < 15) ? 30 : 15;
+                // 聲控閾值 (僅保留最基本的敏感度調整，不影響物理)
+                // 為了防止雜音，維持一個基本的門檻
+                let threshold = 15; 
 
                 if (currentVolume > threshold) {
                     let boost = (currentVolume / 255) * 2;
@@ -274,11 +265,11 @@
             }
         };
 
-        // --- 障礙物 ---
+        // --- 障礙物 (核心修改區) ---
         const obstacles = {
             list: [],
             gap: 200, 
-            dx: 3, // 移動速度
+            dx: 3, 
 
             draw: function() {
                 for (let i = 0; i < this.list.length; i++) {
@@ -292,7 +283,7 @@
                     ctx.fillRect(p.x, canvas.height - p.bottom, p.w, p.bottom);
                     
                     // 裝飾
-                    ctx.fillStyle = (survivalTime > 60) ? '#333' : '#333';
+                    ctx.fillStyle = '#333';
                     ctx.fillRect(p.x + 10, 0, 5, p.top);
                     ctx.fillRect(p.x + p.w - 15, 0, 5, p.top);
                     ctx.fillRect(p.x + 10, canvas.height - p.bottom, 5, p.bottom);
@@ -301,46 +292,74 @@
             },
 
             update: function() {
-                // 生成頻率
-                let frameInterval = 120; 
-                
-                if (survivalTime < 30) {
-                    this.dx = 3;       
-                    this.gap = 200;    
-                } else if (survivalTime < 60) {
-                    this.dx = 5;       
-                    this.gap = 170;    
-                    frameInterval = 100;
-                    canvas.style.backgroundColor = "#e6a65c"; 
-                } else {
-                    this.dx = 7;       
-                    this.gap = 150;    
-                    frameInterval = 80;
-                    canvas.classList.add('scary-mode'); 
+                // ✅ 1. 新手保護期：前 8 秒完全不生成障礙
+                // 讓玩家有時間適應麥克風和鳥的重量
+                if (survivalTime < 8) {
+                    // 只移動現有的（雖然開局沒有），不生成新的
+                } 
+                else {
+                    // ✅ 2. 難度曲線設計
+                    let frameInterval;
+                    let posRange; // 用來控制隨機範圍 (數值越小越集中在中間)
+
+                    if (survivalTime < 15) {
+                        // 新手期 (8-15s)：超級簡單
+                        this.dx = 3;          // 慢速
+                        this.gap = 260;       // ✅ 縫隙超大 (原本200)
+                        frameInterval = 180;  // ✅ 生成間隔很久 (給反應時間)
+                        posRange = canvas.height * 0.1; // ✅ 高度幾乎鎖定在中間
+                    } else if (survivalTime < 30) {
+                        // 熱身期 (15-30s)：稍微縮緊
+                        this.dx = 4;
+                        this.gap = 220;
+                        frameInterval = 140;
+                        posRange = canvas.height * 0.2;
+                    } else if (survivalTime < 60) {
+                        // 正常期 (30-60s)
+                        this.dx = 5;
+                        this.gap = 170;
+                        frameInterval = 100;
+                        posRange = canvas.height * 0.35; // 恢復正常隨機
+                        canvas.style.backgroundColor = "#e6a65c";
+                    } else {
+                        // 地獄模式 (60s+)
+                        this.dx = 7;
+                        this.gap = 150;
+                        frameInterval = 80;
+                        posRange = canvas.height * 0.4;
+                        canvas.classList.add('scary-mode');
+                    }
+
+                    // 生成邏輯
+                    if (frames % frameInterval === 0) {
+                        let center = canvas.height / 2;
+                        // 計算上管長度：中心點 - 半個縫隙 + 隨機偏移
+                        let topHeight = center - (this.gap / 2) + (Math.random() - 0.5) * posRange;
+
+                        // 避免管子太短或太長
+                        let minPipe = 50;
+                        if (topHeight < minPipe) topHeight = minPipe;
+                        if (topHeight > canvas.height - this.gap - minPipe) topHeight = canvas.height - this.gap - minPipe;
+
+                        this.list.push({
+                            x: canvas.width,
+                            w: 70,
+                            top: topHeight,
+                            bottom: canvas.height - (topHeight + this.gap)
+                        });
+                    }
                 }
 
-                if (frames % frameInterval === 0) {
-                    let topHeight = Math.random() * (canvas.height / 2);
-                    let minHeight = 50;
-                    if (topHeight < minHeight) topHeight = minHeight;
-
-                    this.list.push({
-                        x: canvas.width,
-                        w: 70,
-                        top: topHeight,
-                        bottom: canvas.height - (topHeight + this.gap)
-                    });
-                }
-
+                // 移動與碰撞 (所有階段都執行)
                 for (let i = 0; i < this.list.length; i++) {
                     let p = this.list[i];
                     p.x -= this.dx;
 
-                    // 碰撞
+                    // 碰撞判定
                     if (bird.x + bird.width > p.x && bird.x < p.x + p.w && bird.y < p.top) gameOver();
                     if (bird.x + bird.width > p.x && bird.x < p.x + p.w && bird.y + bird.height > canvas.height - p.bottom) gameOver();
 
-                    // 加分
+                    // 加分與移除
                     if (p.x + p.w < 0) {
                         this.list.shift();
                         score++;
@@ -351,7 +370,7 @@
             reset: function() { this.list = []; }
         };
 
-        // --- 麥克風系統 (僅作為輸入使用) ---
+        // --- 系統功能 ---
         async function initAudio() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -361,11 +380,10 @@
                 microphone.connect(analyser);
                 analyser.fftSize = 256;
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
-                
                 isMicReady = true;
                 startGame();
             } catch (err) {
-                alert("無法啟用麥克風！請確認權限或使用 HTTPS 連線。");
+                alert("無法啟用麥克風！請確認權限。");
             }
         }
 
@@ -374,117 +392,80 @@
             analyser.getByteFrequencyData(dataArray);
             let sum = 0;
             for(let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-            return sum / dataArray.length; // 0 ~ 255
+            return sum / dataArray.length; 
         }
 
-        // --- 排行榜 (LocalStorage) ---
         function updateLeaderboard(finalScore) {
             let highScores = JSON.parse(localStorage.getItem('birdHighScores')) || [];
-            
             let date = new Date();
             let timeStr = `${date.getHours()}:${date.getMinutes()}`;
-            
             highScores.push({ score: finalScore, date: timeStr });
             highScores.sort((a, b) => b.score - a.score);
             highScores = highScores.slice(0, 5);
-            
             localStorage.setItem('birdHighScores', JSON.stringify(highScores));
             
             let listHTML = '';
             highScores.forEach((item, index) => {
                 let rankClass = (index === 0) ? 'top' : '';
                 let medal = ['🥇','🥈','🥉','4️⃣','5️⃣'][index] || '';
-                listHTML += `
-                    <div class="rank-item ${rankClass}">
-                        <span>${medal} ${item.date}</span>
-                        <span>${item.score}分</span>
-                    </div>
-                `;
+                listHTML += `<div class="rank-item ${rankClass}"><span>${medal} ${item.date}</span><span>${item.score}分</span></div>`;
             });
             document.getElementById('rankList').innerHTML = listHTML;
         }
 
-        // --- 遊戲流程 ---
         function startGame() {
             document.getElementById('startScreen').classList.add('hidden');
             document.getElementById('gameOverScreen').classList.add('hidden');
-            
             gameState = 'PLAYING';
             score = 0;
             frames = 0;
             survivalTime = 0;
             startTime = Date.now();
-            
             bird.y = canvas.height / 2;
             bird.velocity = 0;
             bird.rotation = 0;
             obstacles.reset();
-            
-            // 重置背景
             canvas.style.backgroundColor = "#70c5ce";
             canvas.classList.remove('scary-mode');
-
             document.getElementById('scoreDisplay').innerText = "SCORE: 0";
-            
-            // 音樂播放邏輯已移除
-
             loop();
         }
 
         function gameOver() {
             if (gameState === 'GAMEOVER') return;
             gameState = 'GAMEOVER';
-            // 音樂暫停邏輯已移除
-            
-            // 鳥撞飛效果
             bird.velocity = -8; 
-
-            // 顯示結算
             document.getElementById('finalScore').innerText = score;
             document.getElementById('finalTime').innerText = survivalTime.toFixed(1) + "s";
-            
-            // 更新排行榜
             updateLeaderboard(score);
-
-            setTimeout(() => {
-                document.getElementById('gameOverScreen').classList.remove('hidden');
-            }, 1000);
+            setTimeout(() => { document.getElementById('gameOverScreen').classList.remove('hidden'); }, 1000);
         }
 
         function loop() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-
             currentVolume = getVolume();
-            
             let barHeight = Math.min(currentVolume / 255 * 100 * 3, 100);
             document.getElementById('micBar').style.height = barHeight + "%";
 
             if (gameState === 'PLAYING') {
                 survivalTime = (Date.now() - startTime) / 1000;
                 document.getElementById('timeDisplay').innerText = `⏱️ ${survivalTime.toFixed(1)}s`;
-
                 bird.update();
                 obstacles.update();
                 obstacles.draw();
                 bird.draw();
-
                 frames++;
                 requestAnimationFrame(loop);
-            } 
-            else if (gameState === 'GAMEOVER') {
+            } else if (gameState === 'GAMEOVER') {
                 bird.y += bird.velocity;
                 bird.velocity += bird.gravity;
                 bird.draw();
                 obstacles.draw();
-
-                if (bird.y < canvas.height + 200) {
-                    requestAnimationFrame(loop);
-                }
+                if (bird.y < canvas.height + 200) requestAnimationFrame(loop);
             }
         }
 
         document.getElementById('startBtn').addEventListener('click', initAudio);
-
     </script>
 </body>
 </html>
