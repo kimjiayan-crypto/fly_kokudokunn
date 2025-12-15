@@ -76,17 +76,22 @@
             color: white;
             z-index: 100;
             pointer-events: auto;
+            padding: 20px; /* 增加內距防止貼邊 */
+            box-sizing: border-box;
         }
 
         .hidden {
             display: none !important;
         }
 
+        /* 【修改 4】修復標題排版 */
         h1 {
-            line-height: 1.5;
+            line-height: 1.4;
             color: #FFD700;
             text-shadow: 4px 4px 0 #000;
-            font-size: 32px;
+            font-size: 24px; /* 稍微調小一點確保不爆版 */
+            margin: 0 0 25px 0; /* 移除左右邊距，增加下方邊距 */
+            max-width: 100%;
         }
 
         button {
@@ -98,7 +103,7 @@
             border: 4px solid #fff;
             cursor: pointer;
             box-shadow: 6px 6px 0px #000;
-            margin-top: 20px;
+            margin-top: 30px;
             transition: transform 0.1s;
         }
 
@@ -107,24 +112,7 @@
             box-shadow: 3px 3px 0px #000;
         }
 
-        /* 排行榜樣式 */
-        #leaderboard {
-            margin-top: 20px;
-            text-align: left;
-            background: rgba(255, 255, 255, 0.1);
-            padding: 15px;
-            border: 2px solid #fff;
-            width: 80%;
-            max-width: 300px;
-        }
-        .rank-item {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
-            font-size: 14px;
-            color: #ccc;
-        }
-        .rank-item.top { color: #FFD700; }
+        /* 【修改 3】移除排行榜相關 CSS */
 
         .assets { display: none; }
     </style>
@@ -150,18 +138,20 @@
         </div>
         
         <div id="startScreen" class="overlay">
-            <h1> 歡迎來到 《聲控國土鳥：安全飛行挑戰》。  <br></h1>
-            <p style="margin:20px 0; line-height:1.8;">
-                大叫 = 往上飛<br>
+            <h1>歡迎來到<br>《聲控國土鳥》<br>安全飛行挑戰</h1>
+            
+            <p style="margin:20px 0; line-height:1.8; color: #fff;">
+                出聲 = 往上飛<br>
                 安靜 = 往下墜
             </p>
             
-            <div style="margin: 20px 0; font-size: 16px; text-align: left; display: inline-block;">
-                <div style="color: #88ccff;">在這個世界裡，<br>
-                    你不是飛行員、不是工程師，<br>
-                    你是一隻必須靠大吼大叫才能維持飛行的鳥。<br>
-                    沒錯，<br>
-                    你是一隻驕傲的國土鳥。</div>                
+            <div style="margin: 10px 0; font-size: 14px; text-align: left; display: inline-block; max-width: 80%; line-height: 1.6;">
+                <div style="color: #88ccff;">
+                    請準備好你的喉嚨，<br>
+                    用聲音控制國土鳥躲避障礙。<br><br>
+                    讓我們可愛的國土鳥，<br>
+                    可以平安的回家！
+                </div>                  
             </div>
 
             <button id="startBtn">允許麥克風並開始</button>
@@ -174,11 +164,6 @@
             <p>本次得分</p>
             <h2 id="finalScore" style="font-size: 50px; color: #FFD700; margin: 10px 0;">0</h2>
             
-            <div id="leaderboard">
-                <div style="text-align:center; margin-bottom:10px; text-decoration:underline;">🏆 英雄榜 (Top 5)</div>
-                <div id="rankList"></div>
-            </div>
-
             <button onclick="location.reload()">再試一次</button>
         </div>
     </div>
@@ -215,8 +200,7 @@
             width: 50,
             height: 50,
             velocity: 0,
-            gravity: 0.25,      // 固定重力
-            // jumpStrength: -5.0, // (這行已經被下方的邏輯取代)
+            gravity: 0.25,
             rotation: 0,
             
             draw: function() {
@@ -241,7 +225,6 @@
             },
 
             update: function() {
-                // ⚠️ 重力不再隨時間變化，保持手感一致
                 this.velocity += this.gravity;
                 this.y += this.velocity;
 
@@ -254,27 +237,19 @@
                     this.velocity = 0;
                 }
 
-                // --- 聲控閾值修正區 (讓遊戲需要大叫) ---
-                
-                // 門檻設定：從 15 改為 55
-                // 15 = 輕聲細語
-                // 55 = 大聲喊叫 / 拍手
-                let threshold = 55; 
+                // --- 聲控閾值修正區 ---
+                // 【修改 2】調低門檻，提高靈敏度 (原為 55)
+                let threshold = 40; 
 
                 if (currentVolume > threshold) {
-                    // 計算吼叫強度 (0.0 ~ 1.0)
                     let intensity = (currentVolume - threshold) / (255 - threshold);
-                    
-                    // 根據強度決定往上飛的力道
-                    // 最少 -4.0 (基本跳躍)，最多約 -8.0 (超級跳躍)
                     let boost = intensity * 4.0; 
-                    
                     this.velocity = -4.0 - boost;
                 }
             }
         };
 
-        // --- 障礙物 (維持原本的新手友善設計) ---
+        // --- 障礙物 ---
         const obstacles = {
             list: [],
             gap: 200, 
@@ -286,83 +261,102 @@
                     
                     ctx.fillStyle = (survivalTime > 60) ? '#000' : '#555'; 
 
-                    // 上管
-                    ctx.fillRect(p.x, 0, p.w, p.top);
-                    // 下管
-                    ctx.fillRect(p.x, canvas.height - p.bottom, p.w, p.bottom);
-                    
-                    // 裝飾
-                    ctx.fillStyle = '#333';
-                    ctx.fillRect(p.x + 10, 0, 5, p.top);
-                    ctx.fillRect(p.x + p.w - 15, 0, 5, p.top);
-                    ctx.fillRect(p.x + 10, canvas.height - p.bottom, 5, p.bottom);
-                    ctx.fillRect(p.x + p.w - 15, canvas.height - p.bottom, 5, p.bottom);
+                    // 【修改 1】 繪製邏輯：根據 easyType 決定繪製哪一邊
+                    // 繪製上管 (如果是正常模式 或是 僅上方模式)
+                    if (p.easyType !== 'bottomOnly') {
+                        ctx.fillRect(p.x, 0, p.w, p.top);
+                        // 裝飾
+                        ctx.fillStyle = '#333';
+                        ctx.fillRect(p.x + 10, 0, 5, p.top);
+                        ctx.fillRect(p.x + p.w - 15, 0, 5, p.top);
+                        ctx.fillStyle = (survivalTime > 60) ? '#000' : '#555'; // 重置顏色給下管用
+                    }
+
+                    // 繪製下管 (如果是正常模式 或是 僅下方模式)
+                    if (p.easyType !== 'topOnly') {
+                        ctx.fillRect(p.x, canvas.height - p.bottom, p.w, p.bottom);
+                        // 裝飾
+                        ctx.fillStyle = '#333';
+                        ctx.fillRect(p.x + 10, canvas.height - p.bottom, 5, p.bottom);
+                        ctx.fillRect(p.x + p.w - 15, canvas.height - p.bottom, 5, p.bottom);
+                    }
                 }
             },
 
             update: function() {
-                // ✅ 1. 新手保護期：前 8 秒完全不生成障礙
+                let frameInterval;
+                let posRange; 
+                let isEasyMode = false; // 標記是否為簡易模式
+
+                // 【修改 1】 難度曲線調整：0-8秒加入簡易模式
                 if (survivalTime < 8) {
-                    // 不生成新的
-                } 
-                else {
-                    // ✅ 2. 難度曲線設計
-                    let frameInterval;
-                    let posRange; 
-
-                    if (survivalTime < 15) {
-                        // 新手期 (8-15s)：超級簡單
-                        this.dx = 3;          // 慢速
-                        this.gap = 260;       // ✅ 縫隙超大
-                        frameInterval = 180;  // ✅ 生成間隔很久
-                        posRange = canvas.height * 0.1; // ✅ 高度幾乎鎖定在中間
-                    } else if (survivalTime < 30) {
-                        // 熱身期 (15-30s)
-                        this.dx = 4;
-                        this.gap = 220;
-                        frameInterval = 140;
-                        posRange = canvas.height * 0.2;
-                    } else if (survivalTime < 60) {
-                        // 正常期 (30-60s)
-                        this.dx = 5;
-                        this.gap = 170;
-                        frameInterval = 100;
-                        posRange = canvas.height * 0.35;
-                        canvas.style.backgroundColor = "#e6a65c";
-                    } else {
-                        // 地獄模式 (60s+)
-                        this.dx = 7;
-                        this.gap = 150;
-                        frameInterval = 80;
-                        posRange = canvas.height * 0.4;
-                        canvas.classList.add('scary-mode');
-                    }
-
-                    // 生成邏輯
-                    if (frames % frameInterval === 0) {
-                        let center = canvas.height / 2;
-                        let topHeight = center - (this.gap / 2) + (Math.random() - 0.5) * posRange;
-
-                        let minPipe = 50;
-                        if (topHeight < minPipe) topHeight = minPipe;
-                        if (topHeight > canvas.height - this.gap - minPipe) topHeight = canvas.height - this.gap - minPipe;
-
-                        this.list.push({
-                            x: canvas.width,
-                            w: 70,
-                            top: topHeight,
-                            bottom: canvas.height - (topHeight + this.gap)
-                        });
-                    }
+                    // 0-8s: 簡易模式 (單邊管)
+                    this.dx = 3;
+                    this.gap = 400; // 雖然單邊用不到 gap，但設大一點避免邏輯錯誤
+                    frameInterval = 200; // 生成慢一點
+                    posRange = canvas.height * 0.1;
+                    isEasyMode = true;
+                } else if (survivalTime < 15) {
+                    // 8-15s: 正常簡單
+                    this.dx = 3;          
+                    this.gap = 260;        
+                    frameInterval = 180;  
+                    posRange = canvas.height * 0.1; 
+                } else if (survivalTime < 30) {
+                    // 15-30s: 普通
+                    this.dx = 4;
+                    this.gap = 220;
+                    frameInterval = 140;
+                    posRange = canvas.height * 0.2;
+                } else if (survivalTime < 60) {
+                    // 30-60s: 加速
+                    this.dx = 5;
+                    this.gap = 170;
+                    frameInterval = 100;
+                    posRange = canvas.height * 0.35;
+                    canvas.style.backgroundColor = "#e6a65c";
+                } else {
+                    // 60s+: 地獄
+                    this.dx = 7;
+                    this.gap = 150;
+                    frameInterval = 80;
+                    posRange = canvas.height * 0.4;
+                    canvas.classList.add('scary-mode');
                 }
 
-                // 移動與碰撞
+                if (frames % frameInterval === 0) {
+                    let center = canvas.height / 2;
+                    let topHeight = center - (this.gap / 2) + (Math.random() - 0.5) * posRange;
+
+                    let minPipe = 50;
+                    if (topHeight < minPipe) topHeight = minPipe;
+                    if (topHeight > canvas.height - this.gap - minPipe) topHeight = canvas.height - this.gap - minPipe;
+
+                    let obstacleData = {
+                        x: canvas.width,
+                        w: 70,
+                        top: topHeight,
+                        bottom: canvas.height - (topHeight + this.gap),
+                        easyType: null // 預設為正常雙邊管
+                    };
+
+                    // 【修改 1】 如果是簡易模式，隨機決定只留上方或下方
+                    if (isEasyMode) {
+                        obstacleData.easyType = Math.random() < 0.5 ? 'topOnly' : 'bottomOnly';
+                    }
+
+                    this.list.push(obstacleData);
+                }
+
                 for (let i = 0; i < this.list.length; i++) {
                     let p = this.list[i];
                     p.x -= this.dx;
 
-                    if (bird.x + bird.width > p.x && bird.x < p.x + p.w && bird.y < p.top) gameOver();
-                    if (bird.x + bird.width > p.x && bird.x < p.x + p.w && bird.y + bird.height > canvas.height - p.bottom) gameOver();
+                    // 【修改 1】 碰撞偵測：根據 easyType 判斷
+                    // 撞到上管 (前提是上管存在)
+                    if (p.easyType !== 'bottomOnly' && bird.x + bird.width > p.x && bird.x < p.x + p.w && bird.y < p.top) gameOver();
+                    // 撞到下管 (前提是下管存在)
+                    if (p.easyType !== 'topOnly' && bird.x + bird.width > p.x && bird.x < p.x + p.w && bird.y + bird.height > canvas.height - p.bottom) gameOver();
 
                     if (p.x + p.w < 0) {
                         this.list.shift();
@@ -399,23 +393,7 @@
             return sum / dataArray.length; 
         }
 
-        function updateLeaderboard(finalScore) {
-            let highScores = JSON.parse(localStorage.getItem('birdHighScores')) || [];
-            let date = new Date();
-            let timeStr = `${date.getHours()}:${date.getMinutes()}`;
-            highScores.push({ score: finalScore, date: timeStr });
-            highScores.sort((a, b) => b.score - a.score);
-            highScores = highScores.slice(0, 5);
-            localStorage.setItem('birdHighScores', JSON.stringify(highScores));
-            
-            let listHTML = '';
-            highScores.forEach((item, index) => {
-                let rankClass = (index === 0) ? 'top' : '';
-                let medal = ['🥇','🥈','🥉','4️⃣','5️⃣'][index] || '';
-                listHTML += `<div class="rank-item ${rankClass}"><span>${medal} ${item.date}</span><span>${item.score}分</span></div>`;
-            });
-            document.getElementById('rankList').innerHTML = listHTML;
-        }
+        // 【修改 3】移除 updateLeaderboard 函數
 
         function startGame() {
             document.getElementById('startScreen').classList.add('hidden');
@@ -441,7 +419,7 @@
             bird.velocity = -8; 
             document.getElementById('finalScore').innerText = score;
             document.getElementById('finalTime').innerText = survivalTime.toFixed(1) + "s";
-            updateLeaderboard(score);
+            // 【修改 3】移除呼叫 updateLeaderboard
             setTimeout(() => { document.getElementById('gameOverScreen').classList.remove('hidden'); }, 1000);
         }
 
